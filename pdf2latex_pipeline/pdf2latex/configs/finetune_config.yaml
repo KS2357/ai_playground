@@ -1,0 +1,70 @@
+# ─────────────────────────────────────────────
+# configs/finetune_config.yaml  –  Rollout-based fine-tuning (PPO / GRPO)
+# ─────────────────────────────────────────────
+
+# ── Base model ────────────────────────────────
+model:
+  checkpoint: "checkpoints/pretrain/best.pt"   # start from supervised checkpoint
+
+# ── Data ──────────────────────────────────────
+data:
+  train_dir: "data/train"
+  val_dir:   "data/val"
+  image_size: 896
+  max_seq_len: 4096
+  num_workers: 4
+  pdf_dpi: 150
+
+# ── Rollout / generation ──────────────────────
+rollout:
+  max_new_tokens: 4096
+  temperature: 0.8
+  top_p: 0.95
+  num_samples_per_prompt: 4       # GRPO: group size G
+  rollout_batch_size: 4           # prompts per rollout step
+
+# ── Reward ────────────────────────────────────
+reward:
+  compilation_weight: 0.5         # binary: does pdflatex succeed?
+  similarity_weight:  0.3         # normalised edit-distance to reference
+  format_weight:      0.2         # brace-matching, env-closing checks
+  latex_compiler: "pdflatex"      # pdflatex | tectonic | xelatex
+  compiler_timeout: 30            # seconds before treating as failure
+  # Optional: learned reward model checkpoint
+  reward_model_checkpoint: null   # "checkpoints/reward_model/best.pt"
+
+# ── PPO specific ──────────────────────────────
+ppo:
+  epochs: 10                      # PPO epochs per collected batch
+  clip_epsilon: 0.2
+  value_loss_coef: 0.5
+  entropy_coef: 0.01
+  kl_coef: 0.1                    # KL penalty against reference model
+  target_kl: 0.05                 # adaptive KL target
+  gamma: 1.0
+  lam: 0.95                       # GAE lambda
+  critic_lr: 1.0e-4
+
+# ── GRPO specific ─────────────────────────────
+grpo:
+  kl_coef: 0.04                   # KL penalty against reference policy
+  clip_epsilon: 0.2               # surrogate clip (same form as PPO)
+  normalize_advantages: true
+
+# ── Optimiser (shared) ────────────────────────
+training:
+  method: "grpo"                  # ppo | grpo
+  total_steps: 5000
+  policy_lr: 5.0e-6
+  warmup_steps: 100
+  weight_decay: 0.0
+  max_grad_norm: 1.0
+  bf16: true
+  gradient_accumulation_steps: 1
+
+  checkpoint_dir: "checkpoints/finetune"
+  save_every_n_steps: 500
+  log_every_n_steps: 10
+  use_wandb: true
+  wandb_project: "pdf2latex"
+  wandb_run_name: "grpo-v1"
